@@ -108,6 +108,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // Initialize app settings (dock visibility, etc.)
         SettingsStore.shared.initializeAppSettings()
         DictationAppSession.shared.start()
+        ApplicationAccessibilitySupport.shared.start()
         OnboardingAISetupController.live.resumePendingDownload()
         LocalAPIServer.shared.start()
 
@@ -152,6 +153,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        ApplicationAccessibilitySupport.shared.stop()
         #if DEBUG
         if let observer = self.updateUISimulationObserver {
             DistributedNotificationCenter.default().removeObserver(observer)
