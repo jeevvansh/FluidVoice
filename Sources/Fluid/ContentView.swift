@@ -4650,7 +4650,12 @@ struct ContentView: View {
 
         let captureOverlayLifecycleID = self.overlayLifecycleID
         let captureTask = Task {
-            guard await self.prepareAccessibilityForRecording(lifecycleID: captureOverlayLifecycleID, mode: .dictate) else { return }
+            let isCaptureCurrent = { self.isCaptureStartCurrent(lifecycleID: captureOverlayLifecycleID, mode: .dictate) }
+            guard await ApplicationAccessibilitySupport.shared.prepareForCapture(isCaptureCurrent: isCaptureCurrent),
+                  !Task.isCancelled, isCaptureCurrent() else {
+                self.clearCancelledCaptureStart(lifecycleID: captureOverlayLifecycleID, mode: .dictate)
+                return
+            }
             let startOutcome = await self.asr.start(onCaptureStarted: {
                 if shouldPlayStartSound {
                     TranscriptionSoundPlayer.shared.playStartSound()
@@ -4696,16 +4701,8 @@ struct ContentView: View {
         }
     }
 
-    private func prepareAccessibilityForRecording(lifecycleID: UInt64, mode: ActiveRecordingMode) async -> Bool {
-        let ready = await ApplicationAccessibilitySupport.shared.prepareForCapture {
-            self.overlayLifecycleID == lifecycleID
-                && self.activeRecordingMode == mode
-                && !self.asr.isRunningOrStarting
-        }
-        if !ready {
-            self.clearCancelledCaptureStart(lifecycleID: lifecycleID, mode: mode)
-        }
-        return ready
+    private func isCaptureStartCurrent(lifecycleID: UInt64, mode: ActiveRecordingMode) -> Bool {
+        self.overlayLifecycleID == lifecycleID && self.activeRecordingMode == mode && !self.asr.isRunningOrStarting
     }
 
     private func clearCancelledCaptureStart(lifecycleID: UInt64, mode: ActiveRecordingMode) {
@@ -4952,9 +4949,11 @@ struct ContentView: View {
                 guard !self.presentExclusiveActivityBlockIfNeeded() else { return }
                 let lifecycleID = self.overlayLifecycleID
                 let previousMode = self.activeRecordingMode
-                guard await ApplicationAccessibilitySupport.shared.prepareForCapture(isCaptureCurrent: {
+                let isCaptureCurrent = {
                     self.overlayLifecycleID == lifecycleID && self.activeRecordingMode == previousMode
-                }) else { return }
+                }
+                guard await ApplicationAccessibilitySupport.shared.prepareForCapture(isCaptureCurrent: isCaptureCurrent),
+                      !Task.isCancelled, isCaptureCurrent() else { return }
                 DebugLogger.shared.info("Command mode triggered", source: "ContentView")
                 self.captureRecordingContext()
 
@@ -4999,9 +4998,11 @@ struct ContentView: View {
                 guard !self.presentExclusiveActivityBlockIfNeeded() else { return }
                 let lifecycleID = self.overlayLifecycleID
                 let previousMode = self.activeRecordingMode
-                guard await ApplicationAccessibilitySupport.shared.prepareForCapture(isCaptureCurrent: {
+                let isCaptureCurrent = {
                     self.overlayLifecycleID == lifecycleID && self.activeRecordingMode == previousMode
-                }) else { return }
+                }
+                guard await ApplicationAccessibilitySupport.shared.prepareForCapture(isCaptureCurrent: isCaptureCurrent),
+                      !Task.isCancelled, isCaptureCurrent() else { return }
 
                 self.captureRecordingContext()
 
@@ -5439,7 +5440,12 @@ extension ContentView {
         }
         let captureOverlayLifecycleID = self.overlayLifecycleID
         return Task {
-            guard await self.prepareAccessibilityForRecording(lifecycleID: captureOverlayLifecycleID, mode: mode) else { return }
+            let isCaptureCurrent = { self.isCaptureStartCurrent(lifecycleID: captureOverlayLifecycleID, mode: mode) }
+            guard await ApplicationAccessibilitySupport.shared.prepareForCapture(isCaptureCurrent: isCaptureCurrent),
+                  !Task.isCancelled, isCaptureCurrent() else {
+                self.clearCancelledCaptureStart(lifecycleID: captureOverlayLifecycleID, mode: mode)
+                return
+            }
             let asrStartStartedAt = ProcessInfo.processInfo.systemUptime
             DebugLogger.shared.benchmark("APP_BENCH", message: "asr_start_call", source: "AppBenchmark")
             let startOutcome = await self.asr.start(onCaptureStarted: {
