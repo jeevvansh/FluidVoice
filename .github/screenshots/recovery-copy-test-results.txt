@@ -1,0 +1,16 @@
+Isolated regression fixture, macOS 27.0 / Apple Silicon, FluidVoice 1.6.12-beta.1 source.
+
+15 XCTest methods passed, 0 failures.
+Tests compile the real recovery views into a standalone XCTest bundle with
+an in-memory clipboard. No app lifecycle or system clipboard is used.
+
+Checks include changed and identical consecutive transcripts, rendered button
+feedback reset, repeated copies, clipboard failures and retries, compact cards,
+and stale dismissal cancellation on replacement/disappearance.
+
+Mutation checks: removing only transient presentation identity produced two
+expected feedback failures; removing only inline feedback reset produced two.
+Both screenshots show the second transcript in the isolated regression fixture:
+recovery-copy-before.png has identity reset disabled, after.png has the fix.
+
+Full app-hosted suite, Intel, and live Grok dictation after this fix were not run.

@@ -109,6 +109,7 @@ class NotchContentState: ObservableObject {
     @Published private(set) var spokenSendCountdownID: UInt64 = 0
     @Published var isTextDeliveryFailureVisible: Bool = false
     @Published private(set) var textDeliveryFailureMessage: String = "Text could not be inserted"
+    @Published private(set) var textDeliveryFailureID = UUID()
     private(set) var textDeliveryFailureTranscript: String = ""
     private(set) var textDeliveryFailure: TextDeliveryFailure?
     @Published var activeDictationShortcutSlot: SettingsStore.DictationShortcutSlot? = nil
@@ -213,6 +214,7 @@ class NotchContentState: ObservableObject {
     }
 
     func recordTextDeliveryFailure(_ failure: TextDeliveryFailure, transcript: String) {
+        self.textDeliveryFailureID = UUID()
         self.textDeliveryFailureTranscript = transcript
         self.textDeliveryFailure = failure
         self.textDeliveryFailureMessage = failure.userFacingMessage ?? ""
@@ -220,6 +222,7 @@ class NotchContentState: ObservableObject {
     }
 
     func clearTextDeliveryFailure() {
+        self.textDeliveryFailureID = UUID()
         self.isTextDeliveryFailureVisible = false
         self.textDeliveryFailure = nil
     }

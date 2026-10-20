@@ -3407,17 +3407,27 @@ struct BottomOverlayView: View {
 
     private var textDeliveryFailureView: some View {
         let message = self.contentState.textDeliveryFailureMessage
+        let presentationID = self.contentState.textDeliveryFailureID
         return DeliveryFailureCard(
+            presentationID: presentationID,
             title: message,
             detail: TextDeliveryFailure.userFacingDetail(forMessage: message),
             transcript: self.contentState.textDeliveryFailureTranscript,
             fontSize: self.layout.transFontSize,
             compact: self.layout.usesFixedCanvas,
-            maxWidth: self.previewMaxWidth
-        ) {
-            self.contentState.clearTextDeliveryFailure()
-            NotchOverlayManager.shared.hide()
-        }
+            maxWidth: self.previewMaxWidth,
+            onDismiss: {
+                guard self.contentState.isTextDeliveryFailureVisible,
+                      self.contentState.textDeliveryFailureID == presentationID else { return }
+                self.contentState.clearTextDeliveryFailure()
+                NotchOverlayManager.shared.hide()
+            },
+            copyToClipboard: { text in
+                guard self.contentState.isTextDeliveryFailureVisible,
+                      self.contentState.textDeliveryFailureID == presentationID else { return false }
+                return ClipboardService.copyToClipboard(text)
+            }
+        )
     }
 
     private func scrollablePreviewText(_ previewText: String) -> some View {

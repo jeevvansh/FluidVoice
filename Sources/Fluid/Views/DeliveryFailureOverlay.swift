@@ -43,26 +43,41 @@ final class DeliveryFailureOverlayController {
 
     private static let displayDuration: TimeInterval = 10
     private var panel: NSPanel?
-    private var hostingView: NSHostingView<DeliveryFailureOverlayView>?
+    private var hostingView: NSHostingView<DeliveryFailureOverlayPresentation>?
     private var dismissTask: Task<Void, Never>?
     private var generation: UInt64 = 0
+    private var presentationID: UUID?
 
     private init() {}
 
     func show(kind: Kind, transcript: String) {
         self.generation &+= 1
-        let currentGeneration = self.generation
+        let presentationID = UUID()
+        self.presentationID = presentationID
         self.dismissTask?.cancel()
 
-        let rootView = DeliveryFailureOverlayView(
+        let rootView = DeliveryFailureOverlayPresentation(
+            presentationID: presentationID,
             kind: kind,
             transcript: transcript,
             displayDuration: Self.displayDuration,
             startedAt: Date(),
             onCopied: { [weak self] in
-                self?.hide(after: 0.9)
+                guard let self, self.presentationID == presentationID else { return }
+                self.hide(after: 0.9)
             },
-            onDismiss: { [weak self] in self?.hide() }
+            onDismiss: { [weak self] in
+                guard let self, self.presentationID == presentationID else { return }
+                self.hide()
+            },
+            copyToClipboard: { [weak self] text in
+                guard let self, self.presentationID == presentationID, self.panel?.isVisible == true else { return false }
+                self.scheduleAutoDismiss(for: presentationID)
+                self.animate(duration: 0.1) {
+                    self.panel?.animator().alphaValue = 1
+                }
+                return ClipboardService.copyToClipboard(text)
+            }
         )
         if let hostingView = self.hostingView {
             hostingView.rootView = rootView
@@ -78,14 +93,25 @@ final class DeliveryFailureOverlayController {
         }
         DebugLogger.shared.info("Delivery failure card shown kind=\(kind)", source: "DeliveryFailureOverlay")
 
+        self.scheduleAutoDismiss(for: presentationID)
+    }
+
+    private func scheduleAutoDismiss(for presentationID: UUID) {
+        self.generation &+= 1
+        let currentGeneration = self.generation
+        self.dismissTask?.cancel()
         self.dismissTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(Self.displayDuration * 1_000_000_000))
-            guard !Task.isCancelled, let self, self.generation == currentGeneration else { return }
+            guard !Task.isCancelled, let self, self.generation == currentGeneration,
+                  self.presentationID == presentationID else { return }
             self.hide()
         }
     }
 
     func hide(after delay: TimeInterval = 0) {
+        if delay <= 0 {
+            self.presentationID = nil
+        }
         self.generation &+= 1
         let hideGeneration = self.generation
         self.dismissTask?.cancel()
@@ -100,12 +126,13 @@ final class DeliveryFailureOverlayController {
                     guard let self, self.generation == hideGeneration else { return }
                     self.panel?.orderOut(nil)
                     self.panel?.alphaValue = 1
+                    self.presentationID = nil
                 }
             }
         }
     }
 
-    private func createPanel(rootView: DeliveryFailureOverlayView) {
+    private func createPanel(rootView: DeliveryFailureOverlayPresentation) {
         let panel = NSPanel(
             contentRect: .zero,
             styleMask: [.borderless, .nonactivatingPanel],
@@ -161,6 +188,30 @@ final class DeliveryFailureOverlayController {
     }
 }
 
+struct DeliveryFailureOverlayPresentation: View {
+    let presentationID: UUID
+    let kind: DeliveryFailureOverlayController.Kind
+    let transcript: String
+    let displayDuration: TimeInterval
+    let startedAt: Date
+    let onCopied: () -> Void
+    let onDismiss: () -> Void
+    var copyToClipboard: (String) -> Bool = { ClipboardService.copyToClipboard($0) }
+
+    var body: some View {
+        DeliveryFailureOverlayView(
+            kind: self.kind,
+            transcript: self.transcript,
+            displayDuration: self.displayDuration,
+            startedAt: self.startedAt,
+            onCopied: self.onCopied,
+            onDismiss: self.onDismiss,
+            copyToClipboard: self.copyToClipboard
+        )
+        .id(self.presentationID)
+    }
+}
+
 private struct DeliveryFailureOverlayView: View {
     let kind: DeliveryFailureOverlayController.Kind
     let transcript: String
@@ -168,6 +219,7 @@ private struct DeliveryFailureOverlayView: View {
     let startedAt: Date
     let onCopied: () -> Void
     let onDismiss: () -> Void
+    let copyToClipboard: (String) -> Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var appeared = false
@@ -276,9 +328,10 @@ private struct DeliveryFailureOverlayView: View {
     }
 
     private func copy() {
-        guard !self.didCopy else { return }
-        _ = ClipboardService.copyToClipboard(self.transcript)
-        withAnimation(.easeOut(duration: 0.15)) { self.didCopy = true }
-        self.onCopied()
+        let copied = self.copyToClipboard(self.transcript)
+        withAnimation(.easeOut(duration: 0.15)) { self.didCopy = copied }
+        if copied {
+            self.onCopied()
+        }
     }
 }

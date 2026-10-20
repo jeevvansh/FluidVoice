@@ -3,6 +3,7 @@ import SwiftUI
 /// Overlay card shown when a transcript could not be delivered. Copy is the
 /// single primary action; the card dismisses itself after `autoDismissDelay`.
 struct DeliveryFailureCard: View {
+    let presentationID: UUID
     let title: String
     let detail: String?
     let transcript: String
@@ -10,11 +11,14 @@ struct DeliveryFailureCard: View {
     let compact: Bool
     let maxWidth: CGFloat
     let onDismiss: () -> Void
+    var copyToClipboard: (String) -> Bool = { ClipboardService.copyToClipboard($0) }
+    var copyDismissDelay: TimeInterval = 1.1
 
     static let autoDismissDelay: TimeInterval = 10
 
     @State private var didCopy = false
     @State private var autoDismissWorkItem: DispatchWorkItem?
+    @State private var copyDismissWorkItem: DispatchWorkItem?
 
     var body: some View {
         VStack(alignment: .leading, spacing: self.compact ? 0 : 10) {
@@ -47,7 +51,11 @@ struct DeliveryFailureCard: View {
         }
         .frame(maxWidth: self.maxWidth, alignment: .leading)
         .onAppear(perform: self.scheduleAutoDismiss)
-        .onDisappear(perform: self.cancelAutoDismiss)
+        .onDisappear(perform: self.cancelDismissal)
+        .onChange(of: self.presentationID) { _, _ in
+            self.didCopy = false
+            self.scheduleAutoDismiss()
+        }
     }
 
     private var glyph: some View {
@@ -92,30 +100,34 @@ struct DeliveryFailureCard: View {
     }
 
     private func copy() {
-        guard !self.didCopy else { return }
-        _ = ClipboardService.copyToClipboard(self.transcript)
-        withAnimation(.easeOut(duration: 0.18)) { self.didCopy = true }
-        self.cancelAutoDismiss()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) {
-            guard self.didCopy else { return }
-            self.dismiss()
+        self.cancelDismissal()
+        let copied = self.copyToClipboard(self.transcript)
+        withAnimation(.easeOut(duration: 0.18)) { self.didCopy = copied }
+        guard copied else {
+            self.scheduleAutoDismiss()
+            return
         }
+        let workItem = DispatchWorkItem { self.dismiss() }
+        self.copyDismissWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + self.copyDismissDelay, execute: workItem)
     }
 
     private func dismiss() {
-        self.cancelAutoDismiss()
+        self.cancelDismissal()
         self.onDismiss()
     }
 
     private func scheduleAutoDismiss() {
-        self.cancelAutoDismiss()
+        self.cancelDismissal()
         let workItem = DispatchWorkItem { self.onDismiss() }
         self.autoDismissWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.autoDismissDelay, execute: workItem)
     }
 
-    private func cancelAutoDismiss() {
+    private func cancelDismissal() {
         self.autoDismissWorkItem?.cancel()
         self.autoDismissWorkItem = nil
+        self.copyDismissWorkItem?.cancel()
+        self.copyDismissWorkItem = nil
     }
 }
