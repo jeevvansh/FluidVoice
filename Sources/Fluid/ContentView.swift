@@ -4652,7 +4652,8 @@ struct ContentView: View {
         let captureTask = Task {
             let isCaptureCurrent = { self.isCaptureStartCurrent(lifecycleID: captureOverlayLifecycleID, mode: .dictate) }
             guard await ApplicationAccessibilitySupport.shared.prepareForCapture(isCaptureCurrent: isCaptureCurrent),
-                  !Task.isCancelled, isCaptureCurrent() else {
+                  !Task.isCancelled, isCaptureCurrent()
+            else {
                 self.clearCancelledCaptureStart(lifecycleID: captureOverlayLifecycleID, mode: .dictate)
                 return
             }
@@ -5442,7 +5443,8 @@ extension ContentView {
         return Task {
             let isCaptureCurrent = { self.isCaptureStartCurrent(lifecycleID: captureOverlayLifecycleID, mode: mode) }
             guard await ApplicationAccessibilitySupport.shared.prepareForCapture(isCaptureCurrent: isCaptureCurrent),
-                  !Task.isCancelled, isCaptureCurrent() else {
+                  !Task.isCancelled, isCaptureCurrent()
+            else {
                 self.clearCancelledCaptureStart(lifecycleID: captureOverlayLifecycleID, mode: mode)
                 return
             }
